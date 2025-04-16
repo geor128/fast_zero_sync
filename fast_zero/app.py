@@ -15,10 +15,10 @@ database = []
 #     return {'message': 'Olá Mundo!'}
 
 
-@app.get('/users/{user_id}')
-def read_root(user_id: int):
-    if user_id == 1:
-        return {'message': 'Olá Joba!'}
+# @app.get('/users/{user_id}')
+# def read_root(user_id: int):
+#     if user_id == 1:
+#         return {'message': 'Olá Joba!'}
 
 
 # @app.get('/', status_code=HTTPStatus.OK, response_class=HTMLResponse)
@@ -121,3 +121,13 @@ def delete_user(user_id: int):
         )
     del database[user_id - 1]
     return {'message': 'User deleted'}
+
+
+@app.get('/users/{user_id}', response_model=UserPublic)
+def read_user__exercicio(user_id: int):
+    if user_id > len(database) or user_id < 1:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail='User not found'
+        )
+
+    return database[user_id - 1]

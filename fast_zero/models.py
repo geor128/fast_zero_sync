@@ -9,7 +9,7 @@ table_registry = registry()
 @table_registry.mapped_as_dataclass
 class User:
     __tablename__ = 'users'
-
+    # se vira em mapear o tipo de inteiro, ele se vira
     id: Mapped[int] = mapped_column(
         init=False, primary_key=True
     )  # fala quem é a chave primaria

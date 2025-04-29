@@ -1,7 +1,6 @@
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 
-from fast_zero.models import User, table_registry
+from fast_zero.models import User
 
 
 def test_create_user(session):

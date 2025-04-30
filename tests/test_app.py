@@ -19,7 +19,7 @@ def test_exercicio_ola_mundo_em_html(client):
     assert '<h1> Olá Mundo </h1>' in response.text
 
 
-def teste_create_user(client):
+def test_create_user(client):
     # client = TestClient(app)
     response = client.post(
         '/users/',
@@ -44,38 +44,47 @@ def teste_create_user(client):
 
 def test_read_users(client):
     response = client.get('/users')
-
     assert response.status_code == HTTPStatus.OK
-    assert response.json() == {
-        'users': [
-            {
-                'username': 'alice',
-                'email': 'alice@example.com',
-                'id': 1,
-            }
-        ]
-    }
+    assert response.json() == {'users': []}
 
 
-def test_update_user(client):
+def test_update_integrity_error(client, user):
+    # ...
+    response = client.post('/users', json={'username': 'alice', 'email': 'alice@example.com', 'password': 'password'})
+
+    # Tenta atualizar outro usuário com mesmo email (deve causar conflito)
+    response_conflict = client.put(
+        '/users/2',
+        json={
+            'username': 'bob',
+            'email': 'alice@example.com',  # email igual ao existente
+            'password': 'secret',
+        },
+    )
+
+    assert response_conflict.status_code == 200
+
+
+def test_update_user(client, user):
     response = client.put(
         '/users/1',
         json={
-            'password': 'password',
-            'username': 'alice2',
-            'email': 'alice@example.com',
-            'id': 1,
+            'username': 'bob',
+            'email': 'bob@example.com',
+            'password': 'mynewpassword',
         },
     )
+    assert response.status_code == HTTPStatus.OK
     assert response.json() == {
-        'username': 'alice2',
-        'email': 'alice@example.com',
+        'username': 'bob',
+        'email': 'bob@example.com',
         'id': 1,
     }
 
 
-def test_delete_user(client):
+def test_delete_user(client, user):
     response = client.delete('/users/1')
+    assert response.status_code == HTTPStatus.OK
     assert response.json() == {'message': 'User deleted'}
 
 

@@ -1,10 +1,16 @@
-from http import HTTPStatus
 
 # from django.contrib.auth.models import User
-from fastapi import FastAPI, HTTPException
+from http import HTTPStatus
+
+from fastapi import Depends, FastAPI, HTTPException
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 from starlette.responses import HTMLResponse
 
-from fast_zero.schemas import Message, UserDB, UserList, UserPublic, UserSchema
+from fast_zero.database import get_session
+from fast_zero.models import User
+from fast_zero.schemas import Message, UserList, UserPublic, UserSchema
 
 app = FastAPI()
 # criar um banco de dados fake
@@ -32,6 +38,15 @@ database = []
 #         <h1>FastZero nosso mundo</h1>
 #     </body>
 #     </html>"""
+
+
+# ...
+
+# criar um novo teste para verificar se o nosso endpoint está retornando o usuário correto quando existe um usuário no banco
+def test_read_users_with_users(client, user):
+    user_schema = UserPublic.model_validate(user).model_dump()
+    response = client.get('/users/')
+    assert response.json() == {'users': [user_schema]}
 
 
 @app.get(
@@ -85,41 +100,67 @@ def exercicio_aula_02():
 # response_class
 # @app.post('/users/',status_code=HTTPStatus.CREATED,response_model=UserPublic)
 # #response_model controla o retorno do que vai aparecer em /docs
-@app.post('/users/', status_code=HTTPStatus.CREATED, response_model=UserPublic)
+# @app.post('/users/', status_code=HTTPStatus.CREATED, response_model=UserPublic)
 # response_model controla o retorno do que vai aparecer em /docs
-def create_user(user: UserSchema):
+# def create_user(user: UserSchema):
     # breakpoint() # para debugar entre 127.0.0.1/docs e clica em
     # execute e para exibir digite l e para sair digite q
-    user_with_id = UserDB(id=len(database) + 1, **user.model_dump())
-    database.append(user_with_id)
-    return user_with_id
+ #   user_with_id = UserDB(id=len(database) + 1, **user.model_dump())
+ #   database.append(user_with_id)
+ #  return user_with_id
 
 
 # Userlist incluido para remover da lista todos os
 # campos que tem password que estiverem nessa lista
-@app.get('/users', response_model=UserList)
-def read_users():
-    return {'users': database}
+@app.get('/users/', response_model=UserList)
+def read_users(
+    skip: int = 0, limit: int = 100, session: Session = Depends(get_session)
+):
+    users = session.scalars(select(User).offset(skip).limit(limit)).all()
+    return {'users': users}
 
+
+# ...
 
 @app.put('/users/{user_id}', response_model=UserPublic)
-def update_user(user_id: int, user: UserSchema):
-    if user_id < 1 or user_id > len(database):
+def update_user(
+    user_id: int, user: UserSchema, session: Session = Depends(get_session)
+):
+
+    db_user = session.scalar(select(User).where(User.id == user_id))
+    if not db_user:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='User not found'
         )
-    user_with_id = UserDB(**user.model_dump(), id=user_id)
-    database[user_id - 1] = user_with_id
-    return user_with_id
+
+    try:
+        db_user.username = user.username
+        db_user.password = user.password
+        db_user.email = user.email
+        session.commit()
+        session.refresh(db_user)
+
+        return db_user
+
+    except IntegrityError:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail='Username or Email already exists'
+        )
 
 
-@app.delete('/users/{user_id}')
-def delete_user(user_id: int):
-    if user_id < 1 or user_id > len(database):
+@app.delete('/users/{user_id}', response_model=Message)
+def delete_user(user_id: int, session: Session = Depends(get_session)):
+    db_user = session.scalar(select(User).where(User.id == user_id))
+
+    if not db_user:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='User not found'
         )
-    del database[user_id - 1]
+
+    session.delete(db_user)
+    session.commit()
+
     return {'message': 'User deleted'}
 
 
@@ -131,3 +172,27 @@ def read_user__exercicio(user_id: int):
         )
 
     return database[user_id - 1]
+
+
+@app.post('/users/', status_code=HTTPStatus.CREATED, response_model=UserPublic)
+# response_model controla o retorno do que vai aparecer em /docs
+def create_user(user: UserSchema, session=Depends(get_session)):
+    db_user = session.scalar(
+        select(User).where(
+            (User.username == user.username) | (User.email == user.email)
+            )
+    )  # existe algum User que tem o nome cadastrado?
+    if db_user:
+        if db_user.username == user.username:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST, detail='Username already exists'
+            )
+        elif db_user.email == user.email:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST, detail='Email already exists'
+            )
+    db_user = User(username=user.username, password=user.password, email=user.email)
+    session.add(db_user)
+    session.commit()
+    session.refresh(db_user)
+    return db_user

@@ -15,7 +15,11 @@ from fast_zero.security import get_password_hash
 @pytest.fixture
 def user(session):
     password = 'testtest'
-    user = User(username='Teste', email='teste@test.com', password=get_password_hash('testtest'))
+    user = User(
+        username='Teste',
+        email='teste@test.com',
+        password=get_password_hash('testtest'),
+    )
     session.add(user)
     session.commit()
     session.refresh(user)
@@ -29,6 +33,7 @@ def user(session):
 def client(session):
     def get_session_override():
         return session
+
     with TestClient(app) as client:
         app.dependency_overrides[get_session] = get_session_override
         yield client
@@ -47,9 +52,7 @@ def session():
         'sqlite:///:memory:',
         connect_args={'check_same_thread': False},
         poolclass=StaticPool,
-
-
-        )
+    )
     table_registry.metadata.create_all(engine)
     # aqui que processa o banco
     # gerenciamento de contexto
@@ -62,7 +65,7 @@ def session():
 @pytest.fixture
 def token(client, user):
     response = client.post(
-        '/token',
+        '/auth/token',
         data={'username': user.email, 'password': user.clean_password},
     )
     return response.json()['access_token']
